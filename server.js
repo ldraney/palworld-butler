@@ -2,6 +2,7 @@ const chokidar = require('chokidar');
 const WebSocket = require('ws');
 const path = require('path');
 const os = require('os');
+const { execFile } = require('child_process');
 
 // Configuration
 const CONFIG = {
@@ -12,12 +13,41 @@ const CONFIG = {
   debounceMs: 30000,
   // Minimum time between auto-comments
   commentCooldownMs: 60000,
+  // Python parser script
+  parserScript: path.join(__dirname, 'parse_save.py'),
 };
 
 // Track last event time to debounce
 let lastEventTime = 0;
 let lastCommentTime = 0;
 let pendingChanges = [];
+
+// Track world state for comparison
+let worldState = {
+  players: [],
+  palCount: 0,
+  lastParsed: null,
+};
+
+// Parse save file using Python script
+function parseSaveFile(savePath) {
+  return new Promise((resolve, reject) => {
+    execFile('python', [CONFIG.parserScript, savePath], { timeout: 60000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`[ButlerBot] Parse error: ${error.message}`);
+        reject(error);
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout.trim());
+        resolve(result);
+      } catch (e) {
+        console.error(`[ButlerBot] JSON parse error: ${e.message}`);
+        reject(e);
+      }
+    });
+  });
+}
 
 // Butler commentary generator
 const butler = {
@@ -47,10 +77,81 @@ const butler = {
     "The winds of change blow through Palpagos.",
   ],
 
-  getRandomComment(category) {
+  newPlayerEvents: [
+    "A new adventurer has arrived in the realm: {player}. Welcome.",
+    "I observe a fresh face among us: {player}.",
+    "{player} has joined the expedition, sir.",
+  ],
+
+  palGainEvents: [
+    "Your menagerie grows, sir. {count} Pals now under your care.",
+    "The collection expands - {count} companions strong.",
+    "Another Pal added to the fold. Current count: {count}.",
+  ],
+
+  palLossEvents: [
+    "It appears a Pal has departed, sir. {count} remain.",
+    "The roster has diminished slightly. {count} Pals accounted for.",
+  ],
+
+  statusReport: [
+    "Current expedition status: {players} adventurers, {pals} Pals.",
+    "The realm persists with {players} players and {pals} companions.",
+  ],
+
+  getRandomComment(category, replacements = {}) {
     const comments = this[category];
     if (!comments) return "An event has occurred, sir.";
-    return comments[Math.floor(Math.random() * comments.length)];
+    let comment = comments[Math.floor(Math.random() * comments.length)];
+    for (const [key, value] of Object.entries(replacements)) {
+      comment = comment.replace(`{${key}}`, value);
+    }
+    return comment;
+  },
+
+  // Analyze parsed save data and generate appropriate commentary
+  analyzeWorldChanges(newData, oldState) {
+    const events = [];
+
+    if (!newData.success) return events;
+
+    // Check for new players
+    for (const player of newData.players) {
+      if (!oldState.players.includes(player)) {
+        events.push({
+          type: 'new_player',
+          comment: this.getRandomComment('newPlayerEvents', { player }),
+          priority: 1,
+        });
+      }
+    }
+
+    // Check for Pal count changes
+    const palDiff = newData.pal_count - oldState.palCount;
+    if (palDiff > 0 && oldState.palCount > 0) {
+      events.push({
+        type: 'pal_gained',
+        comment: this.getRandomComment('palGainEvents', { count: newData.pal_count }),
+        priority: 2,
+      });
+    } else if (palDiff < 0) {
+      events.push({
+        type: 'pal_lost',
+        comment: this.getRandomComment('palLossEvents', { count: newData.pal_count }),
+        priority: 2,
+      });
+    }
+
+    // If no specific events but world changed, use generic
+    if (events.length === 0 && oldState.lastParsed) {
+      events.push({
+        type: 'world_save',
+        comment: this.getRandomComment('saveEvents'),
+        priority: 3,
+      });
+    }
+
+    return events.sort((a, b) => a.priority - b.priority);
   },
 
   analyzeFileChange(filePath) {
@@ -106,13 +207,62 @@ wss.on('connection', (ws) => {
 });
 
 // Process pending changes (debounced)
-function processPendingChanges() {
+async function processPendingChanges() {
   if (pendingChanges.length === 0) return;
 
-  // Analyze all pending changes
-  const analyses = pendingChanges.map(fp => butler.analyzeFileChange(fp));
+  // Check if Level.sav was among the changes
+  const levelSavPath = pendingChanges.find(fp => path.basename(fp) === 'Level.sav');
 
-  // Pick the most significant event
+  if (levelSavPath) {
+    // Parse the save file for detailed analysis
+    try {
+      console.log('[ButlerBot] Parsing Level.sav for world changes...');
+      const saveData = await parseSaveFile(levelSavPath);
+
+      if (saveData.success) {
+        const events = butler.analyzeWorldChanges(saveData, worldState);
+
+        // Update world state
+        worldState.players = saveData.players || [];
+        worldState.palCount = saveData.pal_count || 0;
+        worldState.lastParsed = new Date().toISOString();
+
+        console.log(`[ButlerBot] World state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
+
+        // Broadcast events
+        const now = Date.now();
+        if (events.length > 0 && (now - lastCommentTime > CONFIG.commentCooldownMs)) {
+          lastCommentTime = now;
+          const event = events[0]; // Best priority event
+          broadcast({
+            type: 'game_event',
+            eventType: event.type,
+            comment: event.comment,
+            timestamp: new Date().toISOString(),
+            worldState: {
+              players: worldState.players,
+              palCount: worldState.palCount,
+            },
+          });
+          console.log(`[ButlerBot] ${event.comment}`);
+        }
+      }
+    } catch (err) {
+      console.error('[ButlerBot] Save parsing failed:', err.message);
+      // Fall back to simple analysis
+      fallbackAnalysis();
+    }
+  } else {
+    // No Level.sav, use simple analysis
+    fallbackAnalysis();
+  }
+
+  pendingChanges = [];
+}
+
+// Fallback to simple file-based analysis
+function fallbackAnalysis() {
+  const analyses = pendingChanges.map(fp => butler.analyzeFileChange(fp));
   const priority = ['world_save', 'player_save', 'local_save', 'meta_save'];
   let bestEvent = null;
 
@@ -136,8 +286,6 @@ function processPendingChanges() {
     });
     console.log(`[ButlerBot] ${bestEvent.comment}`);
   }
-
-  pendingChanges = [];
 }
 
 // File watcher
@@ -176,8 +324,52 @@ watcher.on('error', (error) => {
   console.error(`[ButlerBot] Watcher error: ${error}`);
 });
 
-watcher.on('ready', () => {
-  console.log('[ButlerBot] Initial scan complete. Awaiting gameplay events...');
+watcher.on('ready', async () => {
+  console.log('[ButlerBot] Initial scan complete. Loading current world state...');
+
+  // Find and parse the most recent Level.sav for initial state
+  const fs = require('fs');
+  const findLevelSav = (dir) => {
+    let newest = null;
+    let newestTime = 0;
+    const walk = (d) => {
+      try {
+        for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+          const fullPath = path.join(d, entry.name);
+          if (entry.isDirectory()) {
+            walk(fullPath);
+          } else if (entry.name === 'Level.sav') {
+            const stat = fs.statSync(fullPath);
+            if (stat.mtimeMs > newestTime) {
+              newestTime = stat.mtimeMs;
+              newest = fullPath;
+            }
+          }
+        }
+      } catch (e) { /* ignore permission errors */ }
+    };
+    walk(dir);
+    return newest;
+  };
+
+  const levelSav = findLevelSav(CONFIG.savePath);
+  if (levelSav) {
+    try {
+      console.log(`[ButlerBot] Found save: ${levelSav}`);
+      const saveData = await parseSaveFile(levelSav);
+      if (saveData.success) {
+        worldState.players = saveData.players || [];
+        worldState.palCount = saveData.pal_count || 0;
+        worldState.lastParsed = new Date().toISOString();
+        console.log(`[ButlerBot] Initial state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
+        console.log(`[ButlerBot] Players: ${worldState.players.join(', ')}`);
+      }
+    } catch (err) {
+      console.error('[ButlerBot] Initial parse failed:', err.message);
+    }
+  }
+
+  console.log('[ButlerBot] Awaiting gameplay events...');
   console.log('[ButlerBot] Open overlay.html in OBS browser source to begin.');
 });
 
@@ -193,7 +385,23 @@ process.on('SIGINT', () => {
 const http = require('http');
 
 const httpServer = http.createServer((req, res) => {
-  if (req.method === 'POST' && req.url === '/say') {
+  // CORS headers for browser access
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+
+  if (req.method === 'GET' && req.url === '/status') {
+    // Return current world state
+    const status = {
+      worldState: worldState,
+      uptime: process.uptime(),
+      comment: butler.getRandomComment('statusReport', {
+        players: worldState.players.length,
+        pals: worldState.palCount,
+      }),
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(status, null, 2));
+  } else if (req.method === 'POST' && req.url === '/say') {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -219,5 +427,7 @@ const httpServer = http.createServer((req, res) => {
 });
 
 httpServer.listen(8766, () => {
-  console.log('[ButlerBot] HTTP control on http://localhost:8766/say (POST)');
+  console.log('[ButlerBot] HTTP API on http://localhost:8766');
+  console.log('[ButlerBot]   GET  /status - Current world state');
+  console.log('[ButlerBot]   POST /say    - Manual commentary');
 });

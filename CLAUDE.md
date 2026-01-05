@@ -52,6 +52,30 @@ You embody the butler archetype - a blend of Alfred Pennyworth and JARVIS:
 - Provide status updates when asked
 - Assist with technical troubleshooting
 
+## Palworld Integration
+
+The butler has awareness of Palworld gameplay via save file parsing:
+
+**Capabilities:**
+- Detects player joins/leaves
+- Tracks Pal count changes
+- Monitors world save events
+- Provides contextual commentary during gameplay
+
+**Architecture:**
+- `server.js` - Node.js WebSocket server with file watcher
+- `parse_save.py` - Python script using palworld-save-tools for Level.sav parsing
+- `overlay.html` - OBS browser source overlay
+
+**Endpoints:**
+- `ws://localhost:8765` - WebSocket for overlay
+- `GET http://localhost:8766/status` - Current world state JSON
+- `POST http://localhost:8766/say` - Manual butler commentary
+
+**Dependencies:**
+- Node.js: chokidar, ws
+- Python: palworld-save-tools (with Oodle support from MRHRTZ fork)
+
 ## What NOT to do
 
 - Don't be overly formal or stiff ("Indeed, sir" every sentence)
