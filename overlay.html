@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ButlerBotPhilo Overlay</title>
+  <title>Devy Overlay</title>
   <style>
     * {
       margin: 0;
@@ -153,8 +153,8 @@
 
       bubble.innerHTML = `
         <div class="butler-header">
-          <div class="butler-monogram">BP</div>
-          <span class="butler-name">ButlerBot</span>
+          <div class="butler-monogram">D</div>
+          <span class="butler-name">Devy</span>
         </div>
         <div class="comment-text">${escapeHtml(data.comment)}</div>
         <div class="timestamp">${formatTime(data.timestamp)}</div>
@@ -200,35 +200,35 @@
         reconnectTimeout = null;
       }
 
-      console.log('[ButlerBot] Connecting to', CONFIG.wsUrl);
+      console.log('[Devy] Connecting to', CONFIG.wsUrl);
       ws = new WebSocket(CONFIG.wsUrl);
 
       ws.onopen = () => {
-        console.log('[ButlerBot] Connected');
+        console.log('[Devy] Connected');
         statusIndicator.classList.add('connected');
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[ButlerBot] Received:', data);
+          console.log('[Devy] Received:', data);
 
           if (data.comment) {
             createBubble(data);
           }
         } catch (e) {
-          console.error('[ButlerBot] Parse error:', e);
+          console.error('[Devy] Parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        console.log('[ButlerBot] Disconnected');
+        console.log('[Devy] Disconnected');
         statusIndicator.classList.remove('connected');
         scheduleReconnect();
       };
 
       ws.onerror = (error) => {
-        console.error('[ButlerBot] WebSocket error:', error);
+        console.error('[Devy] WebSocket error:', error);
         statusIndicator.classList.remove('connected');
       };
     }
@@ -237,7 +237,7 @@
       if (reconnectTimeout) return;
 
       reconnectTimeout = setTimeout(() => {
-        console.log('[ButlerBot] Attempting reconnection...');
+        console.log('[Devy] Attempting reconnection...');
         connect();
       }, CONFIG.reconnectDelay);
     }

@@ -34,7 +34,7 @@ function parseSaveFile(savePath) {
   return new Promise((resolve, reject) => {
     execFile('python', [CONFIG.parserScript, savePath], { timeout: 60000 }, (error, stdout, stderr) => {
       if (error) {
-        console.error(`[ButlerBot] Parse error: ${error.message}`);
+        console.error(`[Devy] Parse error: ${error.message}`);
         reject(error);
         return;
       }
@@ -42,66 +42,68 @@ function parseSaveFile(savePath) {
         const result = JSON.parse(stdout.trim());
         resolve(result);
       } catch (e) {
-        console.error(`[ButlerBot] JSON parse error: ${e.message}`);
+        console.error(`[Devy] JSON parse error: ${e.message}`);
         reject(e);
       }
     });
   });
 }
 
-// Butler commentary generator
-const butler = {
+// Devy commentary generator
+const devy = {
   greetings: [
-    "Good evening, sir. I've taken my post.",
-    "At your service, sir. All systems are nominal.",
-    "The butler stands ready. Shall we begin?",
+    "Devy online. Monitoring Palpagos.",
+    "Connected. Let's see what's happening in your world.",
+    "Save watcher active. Ready to track your progress.",
   ],
 
   saveEvents: [
-    "I notice the world has been preserved, sir. A prudent autosave.",
-    "Your progress has been dutifully recorded.",
-    "The realm persists. Autosave complete.",
-    "Another checkpoint secured, sir.",
-    "Your adventures have been committed to the archives.",
+    "World saved.",
+    "Progress recorded.",
+    "Autosave detected.",
+    "Checkpoint.",
   ],
 
   playerSaveEvents: [
-    "Your character's state has been noted, sir.",
-    "Personal progress recorded. Your Pals remain accounted for.",
-    "Player data synchronized. All is in order.",
+    "Player data synced.",
+    "Character state updated.",
   ],
 
   worldEvents: [
-    "The world state has shifted. Something of note has occurred.",
-    "I detect changes in the realm, sir.",
-    "The winds of change blow through Palpagos.",
+    "World state changed.",
+    "Something shifted in Palpagos.",
   ],
 
   newPlayerEvents: [
-    "A new adventurer has arrived in the realm: {player}. Welcome.",
-    "I observe a fresh face among us: {player}.",
-    "{player} has joined the expedition, sir.",
+    "{player} joined the world.",
+    "{player} is now online.",
+    "New player: {player}",
+  ],
+
+  playerLeftEvents: [
+    "{player} left the world.",
+    "{player} disconnected.",
   ],
 
   palGainEvents: [
-    "Your menagerie grows, sir. {count} Pals now under your care.",
-    "The collection expands - {count} companions strong.",
-    "Another Pal added to the fold. Current count: {count}.",
+    "Pal count: {count} (+{diff})",
+    "New Pal acquired. Total: {count}",
+    "Collection grows to {count} Pals.",
   ],
 
   palLossEvents: [
-    "It appears a Pal has departed, sir. {count} remain.",
-    "The roster has diminished slightly. {count} Pals accounted for.",
+    "Pal count: {count} ({diff})",
+    "Pal roster decreased to {count}.",
   ],
 
   statusReport: [
-    "Current expedition status: {players} adventurers, {pals} Pals.",
-    "The realm persists with {players} players and {pals} companions.",
+    "World: {players} players, {pals} Pals",
+    "Status: {players} online, {pals} Pals total",
   ],
 
   getRandomComment(category, replacements = {}) {
     const comments = this[category];
-    if (!comments) return "An event has occurred, sir.";
+    if (!comments) return "Event detected.";
     let comment = comments[Math.floor(Math.random() * comments.length)];
     for (const [key, value] of Object.entries(replacements)) {
       comment = comment.replace(`{${key}}`, value);
@@ -126,18 +128,29 @@ const butler = {
       }
     }
 
+    // Check for players who left
+    for (const player of oldState.players) {
+      if (!newData.players.includes(player)) {
+        events.push({
+          type: 'player_left',
+          comment: this.getRandomComment('playerLeftEvents', { player }),
+          priority: 1,
+        });
+      }
+    }
+
     // Check for Pal count changes
     const palDiff = newData.pal_count - oldState.palCount;
     if (palDiff > 0 && oldState.palCount > 0) {
       events.push({
         type: 'pal_gained',
-        comment: this.getRandomComment('palGainEvents', { count: newData.pal_count }),
+        comment: this.getRandomComment('palGainEvents', { count: newData.pal_count, diff: palDiff }),
         priority: 2,
       });
     } else if (palDiff < 0) {
       events.push({
         type: 'pal_lost',
-        comment: this.getRandomComment('palLossEvents', { count: newData.pal_count }),
+        comment: this.getRandomComment('palLossEvents', { count: newData.pal_count, diff: palDiff }),
         priority: 2,
       });
     }
@@ -178,7 +191,7 @@ const butler = {
 // WebSocket server
 const wss = new WebSocket.Server({ port: CONFIG.wsPort });
 
-console.log(`[ButlerBot] WebSocket server running on ws://localhost:${CONFIG.wsPort}`);
+console.log(`[Devy] WebSocket server running on ws://localhost:${CONFIG.wsPort}`);
 
 // Broadcast to all connected clients
 function broadcast(data) {
@@ -192,17 +205,17 @@ function broadcast(data) {
 
 // Handle new connections
 wss.on('connection', (ws) => {
-  console.log('[ButlerBot] Client connected');
+  console.log('[Devy] Client connected');
 
   // Send greeting
   ws.send(JSON.stringify({
     type: 'greeting',
-    comment: butler.getRandomComment('greetings'),
+    comment: devy.getRandomComment('greetings'),
     timestamp: new Date().toISOString(),
   }));
 
   ws.on('close', () => {
-    console.log('[ButlerBot] Client disconnected');
+    console.log('[Devy] Client disconnected');
   });
 });
 
@@ -216,18 +229,18 @@ async function processPendingChanges() {
   if (levelSavPath) {
     // Parse the save file for detailed analysis
     try {
-      console.log('[ButlerBot] Parsing Level.sav for world changes...');
+      console.log('[Devy] Parsing Level.sav for world changes...');
       const saveData = await parseSaveFile(levelSavPath);
 
       if (saveData.success) {
-        const events = butler.analyzeWorldChanges(saveData, worldState);
+        const events = devy.analyzeWorldChanges(saveData, worldState);
 
         // Update world state
         worldState.players = saveData.players || [];
         worldState.palCount = saveData.pal_count || 0;
         worldState.lastParsed = new Date().toISOString();
 
-        console.log(`[ButlerBot] World state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
+        console.log(`[Devy] World state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
 
         // Broadcast events
         const now = Date.now();
@@ -244,11 +257,11 @@ async function processPendingChanges() {
               palCount: worldState.palCount,
             },
           });
-          console.log(`[ButlerBot] ${event.comment}`);
+          console.log(`[Devy] ${event.comment}`);
         }
       }
     } catch (err) {
-      console.error('[ButlerBot] Save parsing failed:', err.message);
+      console.error('[Devy] Save parsing failed:', err.message);
       // Fall back to simple analysis
       fallbackAnalysis();
     }
@@ -262,7 +275,7 @@ async function processPendingChanges() {
 
 // Fallback to simple file-based analysis
 function fallbackAnalysis() {
-  const analyses = pendingChanges.map(fp => butler.analyzeFileChange(fp));
+  const analyses = pendingChanges.map(fp => devy.analyzeFileChange(fp));
   const priority = ['world_save', 'player_save', 'local_save', 'meta_save'];
   let bestEvent = null;
 
@@ -284,12 +297,12 @@ function fallbackAnalysis() {
       timestamp: new Date().toISOString(),
       filesChanged: pendingChanges.length,
     });
-    console.log(`[ButlerBot] ${bestEvent.comment}`);
+    console.log(`[Devy] ${bestEvent.comment}`);
   }
 }
 
 // File watcher
-console.log(`[ButlerBot] Watching: ${CONFIG.savePath}`);
+console.log(`[Devy] Watching: ${CONFIG.savePath}`);
 
 const watcher = chokidar.watch(CONFIG.savePath, {
   ignored: /(^|[\/\\])\../, // ignore dotfiles
@@ -317,15 +330,15 @@ watcher.on('change', (filePath) => {
 });
 
 watcher.on('add', (filePath) => {
-  console.log(`[ButlerBot] New file detected: ${path.basename(filePath)}`);
+  console.log(`[Devy] New file detected: ${path.basename(filePath)}`);
 });
 
 watcher.on('error', (error) => {
-  console.error(`[ButlerBot] Watcher error: ${error}`);
+  console.error(`[Devy] Watcher error: ${error}`);
 });
 
 watcher.on('ready', async () => {
-  console.log('[ButlerBot] Initial scan complete. Loading current world state...');
+  console.log('[Devy] Initial scan complete. Loading current world state...');
 
   // Find and parse the most recent Level.sav for initial state
   const fs = require('fs');
@@ -355,27 +368,27 @@ watcher.on('ready', async () => {
   const levelSav = findLevelSav(CONFIG.savePath);
   if (levelSav) {
     try {
-      console.log(`[ButlerBot] Found save: ${levelSav}`);
+      console.log(`[Devy] Found save: ${levelSav}`);
       const saveData = await parseSaveFile(levelSav);
       if (saveData.success) {
         worldState.players = saveData.players || [];
         worldState.palCount = saveData.pal_count || 0;
         worldState.lastParsed = new Date().toISOString();
-        console.log(`[ButlerBot] Initial state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
-        console.log(`[ButlerBot] Players: ${worldState.players.join(', ')}`);
+        console.log(`[Devy] Initial state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
+        console.log(`[Devy] Players: ${worldState.players.join(', ')}`);
       }
     } catch (err) {
-      console.error('[ButlerBot] Initial parse failed:', err.message);
+      console.error('[Devy] Initial parse failed:', err.message);
     }
   }
 
-  console.log('[ButlerBot] Awaiting gameplay events...');
-  console.log('[ButlerBot] Open overlay.html in OBS browser source to begin.');
+  console.log('[Devy] Awaiting gameplay events...');
+  console.log('[Devy] Open overlay.html in OBS browser source to begin.');
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n[ButlerBot] Standing down, sir. Good evening.');
+  console.log('\n[Devy] Standing down, sir. Good evening.');
   watcher.close();
   wss.close();
   process.exit(0);
@@ -394,7 +407,7 @@ const httpServer = http.createServer((req, res) => {
     const status = {
       worldState: worldState,
       uptime: process.uptime(),
-      comment: butler.getRandomComment('statusReport', {
+      comment: devy.getRandomComment('statusReport', {
         players: worldState.players.length,
         pals: worldState.palCount,
       }),
@@ -412,7 +425,7 @@ const httpServer = http.createServer((req, res) => {
           comment: comment,
           timestamp: new Date().toISOString(),
         });
-        console.log(`[ButlerBot] ${comment}`);
+        console.log(`[Devy] ${comment}`);
         res.writeHead(200);
         res.end('OK');
       } else {
@@ -427,7 +440,7 @@ const httpServer = http.createServer((req, res) => {
 });
 
 httpServer.listen(8766, () => {
-  console.log('[ButlerBot] HTTP API on http://localhost:8766');
-  console.log('[ButlerBot]   GET  /status - Current world state');
-  console.log('[ButlerBot]   POST /say    - Manual commentary');
+  console.log('[Devy] HTTP API on http://localhost:8766');
+  console.log('[Devy]   GET  /status - Current world state');
+  console.log('[Devy]   POST /say    - Manual commentary');
 });
