@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Devy Overlay</title>
+  <title>PAL-E Overlay</title>
   <style>
     * {
       margin: 0;
@@ -153,8 +153,8 @@
 
       bubble.innerHTML = `
         <div class="butler-header">
-          <div class="butler-monogram">D</div>
-          <span class="butler-name">Devy</span>
+          <div class="butler-monogram">P</div>
+          <span class="butler-name">PAL-E</span>
         </div>
         <div class="comment-text">${escapeHtml(data.comment)}</div>
         <div class="timestamp">${formatTime(data.timestamp)}</div>
@@ -200,35 +200,35 @@
         reconnectTimeout = null;
       }
 
-      console.log('[Devy] Connecting to', CONFIG.wsUrl);
+      console.log('[PAL-E] Connecting to', CONFIG.wsUrl);
       ws = new WebSocket(CONFIG.wsUrl);
 
       ws.onopen = () => {
-        console.log('[Devy] Connected');
+        console.log('[PAL-E] Connected');
         statusIndicator.classList.add('connected');
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[Devy] Received:', data);
+          console.log('[PAL-E] Received:', data);
 
           if (data.comment) {
             createBubble(data);
           }
         } catch (e) {
-          console.error('[Devy] Parse error:', e);
+          console.error('[PAL-E] Parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        console.log('[Devy] Disconnected');
+        console.log('[PAL-E] Disconnected');
         statusIndicator.classList.remove('connected');
         scheduleReconnect();
       };
 
       ws.onerror = (error) => {
-        console.error('[Devy] WebSocket error:', error);
+        console.error('[PAL-E] WebSocket error:', error);
         statusIndicator.classList.remove('connected');
       };
     }
@@ -237,7 +237,7 @@
       if (reconnectTimeout) return;
 
       reconnectTimeout = setTimeout(() => {
-        console.log('[Devy] Attempting reconnection...');
+        console.log('[PAL-E] Attempting reconnection...');
         connect();
       }, CONFIG.reconnectDelay);
     }

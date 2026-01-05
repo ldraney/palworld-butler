@@ -34,7 +34,7 @@ function parseSaveFile(savePath) {
   return new Promise((resolve, reject) => {
     execFile('python', [CONFIG.parserScript, savePath], { timeout: 60000 }, (error, stdout, stderr) => {
       if (error) {
-        console.error(`[Devy] Parse error: ${error.message}`);
+        console.error(`[PAL-E] Parse error: ${error.message}`);
         reject(error);
         return;
       }
@@ -42,19 +42,19 @@ function parseSaveFile(savePath) {
         const result = JSON.parse(stdout.trim());
         resolve(result);
       } catch (e) {
-        console.error(`[Devy] JSON parse error: ${e.message}`);
+        console.error(`[PAL-E] JSON parse error: ${e.message}`);
         reject(e);
       }
     });
   });
 }
 
-// Devy commentary generator
-const devy = {
+// PAL-E commentary generator
+const pale = {
   greetings: [
-    "Devy online. Monitoring Palpagos.",
-    "Connected. Let's see what's happening in your world.",
-    "Save watcher active. Ready to track your progress.",
+    "PAL-E online. Monitoring Palpagos.",
+    "Connected. Ready to assist.",
+    "Save watcher active. Let's get to work.",
   ],
 
   saveEvents: [
@@ -191,7 +191,7 @@ const devy = {
 // WebSocket server
 const wss = new WebSocket.Server({ port: CONFIG.wsPort });
 
-console.log(`[Devy] WebSocket server running on ws://localhost:${CONFIG.wsPort}`);
+console.log(`[PAL-E] WebSocket server running on ws://localhost:${CONFIG.wsPort}`);
 
 // Broadcast to all connected clients
 function broadcast(data) {
@@ -205,17 +205,17 @@ function broadcast(data) {
 
 // Handle new connections
 wss.on('connection', (ws) => {
-  console.log('[Devy] Client connected');
+  console.log('[PAL-E] Client connected');
 
   // Send greeting
   ws.send(JSON.stringify({
     type: 'greeting',
-    comment: devy.getRandomComment('greetings'),
+    comment: pale.getRandomComment('greetings'),
     timestamp: new Date().toISOString(),
   }));
 
   ws.on('close', () => {
-    console.log('[Devy] Client disconnected');
+    console.log('[PAL-E] Client disconnected');
   });
 });
 
@@ -229,18 +229,18 @@ async function processPendingChanges() {
   if (levelSavPath) {
     // Parse the save file for detailed analysis
     try {
-      console.log('[Devy] Parsing Level.sav for world changes...');
+      console.log('[PAL-E] Parsing Level.sav for world changes...');
       const saveData = await parseSaveFile(levelSavPath);
 
       if (saveData.success) {
-        const events = devy.analyzeWorldChanges(saveData, worldState);
+        const events = pale.analyzeWorldChanges(saveData, worldState);
 
         // Update world state
         worldState.players = saveData.players || [];
         worldState.palCount = saveData.pal_count || 0;
         worldState.lastParsed = new Date().toISOString();
 
-        console.log(`[Devy] World state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
+        console.log(`[PAL-E] World state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
 
         // Broadcast events
         const now = Date.now();
@@ -257,11 +257,11 @@ async function processPendingChanges() {
               palCount: worldState.palCount,
             },
           });
-          console.log(`[Devy] ${event.comment}`);
+          console.log(`[PAL-E] ${event.comment}`);
         }
       }
     } catch (err) {
-      console.error('[Devy] Save parsing failed:', err.message);
+      console.error('[PAL-E] Save parsing failed:', err.message);
       // Fall back to simple analysis
       fallbackAnalysis();
     }
@@ -275,7 +275,7 @@ async function processPendingChanges() {
 
 // Fallback to simple file-based analysis
 function fallbackAnalysis() {
-  const analyses = pendingChanges.map(fp => devy.analyzeFileChange(fp));
+  const analyses = pendingChanges.map(fp => pale.analyzeFileChange(fp));
   const priority = ['world_save', 'player_save', 'local_save', 'meta_save'];
   let bestEvent = null;
 
@@ -297,12 +297,12 @@ function fallbackAnalysis() {
       timestamp: new Date().toISOString(),
       filesChanged: pendingChanges.length,
     });
-    console.log(`[Devy] ${bestEvent.comment}`);
+    console.log(`[PAL-E] ${bestEvent.comment}`);
   }
 }
 
 // File watcher
-console.log(`[Devy] Watching: ${CONFIG.savePath}`);
+console.log(`[PAL-E] Watching: ${CONFIG.savePath}`);
 
 const watcher = chokidar.watch(CONFIG.savePath, {
   ignored: /(^|[\/\\])\../, // ignore dotfiles
@@ -330,15 +330,15 @@ watcher.on('change', (filePath) => {
 });
 
 watcher.on('add', (filePath) => {
-  console.log(`[Devy] New file detected: ${path.basename(filePath)}`);
+  console.log(`[PAL-E] New file detected: ${path.basename(filePath)}`);
 });
 
 watcher.on('error', (error) => {
-  console.error(`[Devy] Watcher error: ${error}`);
+  console.error(`[PAL-E] Watcher error: ${error}`);
 });
 
 watcher.on('ready', async () => {
-  console.log('[Devy] Initial scan complete. Loading current world state...');
+  console.log('[PAL-E] Initial scan complete. Loading current world state...');
 
   // Find and parse the most recent Level.sav for initial state
   const fs = require('fs');
@@ -368,27 +368,27 @@ watcher.on('ready', async () => {
   const levelSav = findLevelSav(CONFIG.savePath);
   if (levelSav) {
     try {
-      console.log(`[Devy] Found save: ${levelSav}`);
+      console.log(`[PAL-E] Found save: ${levelSav}`);
       const saveData = await parseSaveFile(levelSav);
       if (saveData.success) {
         worldState.players = saveData.players || [];
         worldState.palCount = saveData.pal_count || 0;
         worldState.lastParsed = new Date().toISOString();
-        console.log(`[Devy] Initial state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
-        console.log(`[Devy] Players: ${worldState.players.join(', ')}`);
+        console.log(`[PAL-E] Initial state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
+        console.log(`[PAL-E] Players: ${worldState.players.join(', ')}`);
       }
     } catch (err) {
-      console.error('[Devy] Initial parse failed:', err.message);
+      console.error('[PAL-E] Initial parse failed:', err.message);
     }
   }
 
-  console.log('[Devy] Awaiting gameplay events...');
-  console.log('[Devy] Open overlay.html in OBS browser source to begin.');
+  console.log('[PAL-E] Awaiting gameplay events...');
+  console.log('[PAL-E] Open overlay.html in OBS browser source to begin.');
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n[Devy] Standing down, sir. Good evening.');
+  console.log('\n[PAL-E] Standing down, sir. Good evening.');
   watcher.close();
   wss.close();
   process.exit(0);
@@ -407,7 +407,7 @@ const httpServer = http.createServer((req, res) => {
     const status = {
       worldState: worldState,
       uptime: process.uptime(),
-      comment: devy.getRandomComment('statusReport', {
+      comment: pale.getRandomComment('statusReport', {
         players: worldState.players.length,
         pals: worldState.palCount,
       }),
@@ -425,7 +425,7 @@ const httpServer = http.createServer((req, res) => {
           comment: comment,
           timestamp: new Date().toISOString(),
         });
-        console.log(`[Devy] ${comment}`);
+        console.log(`[PAL-E] ${comment}`);
         res.writeHead(200);
         res.end('OK');
       } else {
@@ -440,7 +440,7 @@ const httpServer = http.createServer((req, res) => {
 });
 
 httpServer.listen(8766, () => {
-  console.log('[Devy] HTTP API on http://localhost:8766');
-  console.log('[Devy]   GET  /status - Current world state');
-  console.log('[Devy]   POST /say    - Manual commentary');
+  console.log('[PAL-E] HTTP API on http://localhost:8766');
+  console.log('[PAL-E]   GET  /status - Current world state');
+  console.log('[PAL-E]   POST /say    - Manual commentary');
 });
