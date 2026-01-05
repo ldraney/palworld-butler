@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ButlerBotPhilo Overlay</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: transparent;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #overlay-container {
+      position: fixed;
+      bottom: 40px;
+      left: 40px;
+      max-width: 450px;
+      pointer-events: none;
+    }
+
+    .comment-bubble {
+      background: rgba(20, 20, 25, 0.85);
+      border-left: 3px solid #c9a959;
+      border-radius: 4px;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.4s ease forwards;
+    }
+
+    .comment-bubble.fade-out {
+      animation: fadeOutDown 0.6s ease forwards;
+    }
+
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeOutDown {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+    }
+
+    .butler-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .butler-monogram {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #c9a959 0%, #a08035 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 13px;
+      color: #1a1a1f;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+
+    .butler-name {
+      color: #c9a959;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .comment-text {
+      color: #e8e8ec;
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 400;
+    }
+
+    .timestamp {
+      color: #666;
+      font-size: 10px;
+      margin-top: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    /* Connection status indicator */
+    #connection-status {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff4444;
+      transition: background 0.3s ease;
+    }
+
+    #connection-status.connected {
+      background: #44ff44;
+    }
+  </style>
+</head>
+<body>
+  <div id="connection-status"></div>
+  <div id="overlay-container"></div>
+
+  <script>
+    const CONFIG = {
+      wsUrl: 'ws://localhost:8765',
+      fadeOutDelay: 10000,     // 10 seconds before fade
+      maxBubbles: 3,           // Max visible bubbles
+      reconnectDelay: 3000,    // Reconnect after 3s on disconnect
+    };
+
+    const container = document.getElementById('overlay-container');
+    const statusIndicator = document.getElementById('connection-status');
+    let ws = null;
+    let reconnectTimeout = null;
+
+    function formatTime(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    }
+
+    function createBubble(data) {
+      const bubble = document.createElement('div');
+      bubble.className = 'comment-bubble';
+
+      bubble.innerHTML = `
+        <div class="butler-header">
+          <div class="butler-monogram">BP</div>
+          <span class="butler-name">ButlerBot</span>
+        </div>
+        <div class="comment-text">${escapeHtml(data.comment)}</div>
+        <div class="timestamp">${formatTime(data.timestamp)}</div>
+      `;
+
+      container.appendChild(bubble);
+
+      // Manage max bubbles
+      const bubbles = container.querySelectorAll('.comment-bubble:not(.fade-out)');
+      if (bubbles.length > CONFIG.maxBubbles) {
+        const oldest = bubbles[0];
+        removeBubble(oldest);
+      }
+
+      // Schedule fade out
+      setTimeout(() => {
+        removeBubble(bubble);
+      }, CONFIG.fadeOutDelay);
+
+      return bubble;
+    }
+
+    function removeBubble(bubble) {
+      if (!bubble || bubble.classList.contains('fade-out')) return;
+
+      bubble.classList.add('fade-out');
+      setTimeout(() => {
+        if (bubble.parentNode) {
+          bubble.parentNode.removeChild(bubble);
+        }
+      }, 600); // Match animation duration
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function connect() {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+
+      console.log('[ButlerBot] Connecting to', CONFIG.wsUrl);
+      ws = new WebSocket(CONFIG.wsUrl);
+
+      ws.onopen = () => {
+        console.log('[ButlerBot] Connected');
+        statusIndicator.classList.add('connected');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[ButlerBot] Received:', data);
+
+          if (data.comment) {
+            createBubble(data);
+          }
+        } catch (e) {
+          console.error('[ButlerBot] Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('[ButlerBot] Disconnected');
+        statusIndicator.classList.remove('connected');
+        scheduleReconnect();
+      };
+
+      ws.onerror = (error) => {
+        console.error('[ButlerBot] WebSocket error:', error);
+        statusIndicator.classList.remove('connected');
+      };
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimeout) return;
+
+      reconnectTimeout = setTimeout(() => {
+        console.log('[ButlerBot] Attempting reconnection...');
+        connect();
+      }, CONFIG.reconnectDelay);
+    }
+
+    // Start connection
+    connect();
+  </script>
+</body>
+</html>

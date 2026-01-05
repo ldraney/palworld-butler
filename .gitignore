@@ -1,0 +1,7 @@
+node_modules/
+*.json.bak
+*.sav
+*.sav.json
+player_test.json
+level_test.json
+.env
