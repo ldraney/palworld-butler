@@ -7,3 +7,12 @@ level_test.json
 .env
 .playwright-mcp/
 nul
+
+# Python
+__pycache__/
+*.pyc
+
+# PAL-E generated files
+snapshot_*.json
+save_history.json
+.claude/
