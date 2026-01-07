@@ -1,0 +1,34 @@
+{
+  "name": "pal-e",
+  "description": "Palworld AI Companion Ecosystem",
+  "version": "1.0.0",
+  "components": [
+    {
+      "name": "pal-e",
+      "repo": "ldraney/pal-e",
+      "url": "https://github.com/ldraney/pal-e",
+      "role": "Dashboard & Registry",
+      "description": "Web dashboard for monitoring world state, central hub for ecosystem",
+      "status": "active",
+      "port": 8766
+    },
+    {
+      "name": "pal-e-observer",
+      "repo": "ldraney/pal-e-observer",
+      "url": "https://github.com/ldraney/pal-e-observer",
+      "role": "Save file watching & event detection",
+      "description": "Watches Palworld save files, detects changes, broadcasts events via WebSocket",
+      "status": "planned",
+      "port": 8765
+    },
+    {
+      "name": "pal-e-expert",
+      "repo": "ldraney/pal-e-expert",
+      "url": "https://github.com/ldraney/pal-e-expert",
+      "role": "MCP coaching tools",
+      "description": "Breeding calculator, boss strategy, base optimization - Claude-native MCP server",
+      "status": "planned",
+      "port": null
+    }
+  ]
+}
