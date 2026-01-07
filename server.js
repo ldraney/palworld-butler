@@ -397,7 +397,7 @@ watcher.on('ready', async () => {
   }
 
   console.log('[PAL-E] Awaiting gameplay events...');
-  console.log('[PAL-E] Open overlay.html in OBS browser source to begin.');
+  console.log('[PAL-E] Open http://localhost:8766 in browser for dashboard');
 });
 
 // Graceful shutdown
@@ -411,12 +411,303 @@ process.on('SIGINT', () => {
 // Simple HTTP server for manual commentary
 const http = require('http');
 
+// Dashboard HTML template
+const dashboardHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PAL-E Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    header {
+      background: linear-gradient(135deg, #16213e, #1a1a2e);
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      color: #e94560;
+      margin-bottom: 10px;
+    }
+    .world-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .info-item { color: #94a3b8; font-size: 0.9rem; }
+    .info-value { color: #fff; font-weight: 600; }
+    .host-badge {
+      display: inline-block;
+      background: #e94560;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-left: 8px;
+    }
+    .client-badge {
+      display: inline-block;
+      background: #0f3460;
+      color: #94a3b8;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-left: 8px;
+    }
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .panel {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .panel h2 {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .player-list { list-style: none; }
+    .player-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .player-list li:last-child { border-bottom: none; }
+    .player-name { font-weight: 500; }
+    .player-level { color: #94a3b8; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .stat {
+      background: #1a1a2e;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #e94560;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+    .activity-feed {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .activity-feed h2 {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .feed-list { list-style: none; max-height: 200px; overflow-y: auto; }
+    .feed-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #0f3460;
+      font-size: 0.9rem;
+    }
+    .feed-item:last-child { border-bottom: none; }
+    .feed-time {
+      color: #64748b;
+      font-size: 0.75rem;
+      margin-right: 8px;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-connected { background: #22c55e; }
+    .status-disconnected { background: #ef4444; }
+    .connection-status {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 10px;
+    }
+    .no-data { color: #64748b; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PAL-E Dashboard</h1>
+      <div class="world-info">
+        <div>
+          <span class="info-item">World ID:</span>
+          <span class="info-value" id="worldId">Loading...</span>
+        </div>
+        <div>
+          <span class="info-item">Host:</span>
+          <span class="info-value" id="hostPlayer">Loading...</span>
+        </div>
+        <div>
+          <span class="info-item">Last Save:</span>
+          <span class="info-value" id="lastSave">-</span>
+        </div>
+        <div>
+          <span class="info-item">Status:</span>
+          <span class="info-value" id="hostStatus">-</span>
+        </div>
+      </div>
+      <div class="connection-status">
+        <span class="status-dot status-disconnected" id="statusDot"></span>
+        <span id="connectionText">Connecting...</span>
+      </div>
+    </header>
+
+    <div class="panels">
+      <div class="panel">
+        <h2>Players</h2>
+        <ul class="player-list" id="playerList">
+          <li class="no-data">No data yet</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h2>Stats</h2>
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-value" id="palCount">-</div>
+            <div class="stat-label">Pals</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="playerCount">-</div>
+            <div class="stat-label">Players</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="activity-feed">
+      <h2>Recent Activity</h2>
+      <ul class="feed-list" id="feedList">
+        <li class="no-data">Waiting for events...</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const ws = new WebSocket('ws://localhost:8765');
+    const feedItems = [];
+    const MAX_FEED_ITEMS = 10;
+
+    function formatTime(isoString) {
+      if (!isoString) return '-';
+      const d = new Date(isoString);
+      return d.toLocaleTimeString();
+    }
+
+    function timeAgo(isoString) {
+      if (!isoString) return '-';
+      const seconds = Math.floor((Date.now() - new Date(isoString)) / 1000);
+      if (seconds < 60) return seconds + 's ago';
+      if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+      return Math.floor(seconds / 3600) + 'h ago';
+    }
+
+    function updateUI(data) {
+      if (data.worldState) {
+        const ws = data.worldState;
+        document.getElementById('worldId').textContent = ws.worldId || 'Unknown';
+        document.getElementById('hostPlayer').textContent = ws.hostPlayer || 'Unknown';
+        document.getElementById('palCount').textContent = ws.palCount || 0;
+        document.getElementById('playerCount').textContent = ws.players?.length || 0;
+        document.getElementById('lastSave').textContent = timeAgo(ws.lastParsed);
+
+        // Update player list
+        const playerList = document.getElementById('playerList');
+        if (ws.players && ws.players.length > 0) {
+          playerList.innerHTML = ws.players.map(p =>
+            '<li><span class="player-name">' + p + '</span></li>'
+          ).join('');
+        }
+      }
+    }
+
+    function addFeedItem(text) {
+      feedItems.unshift({ time: new Date().toISOString(), text });
+      if (feedItems.length > MAX_FEED_ITEMS) feedItems.pop();
+
+      const feedList = document.getElementById('feedList');
+      feedList.innerHTML = feedItems.map(item =>
+        '<li class="feed-item"><span class="feed-time">' + formatTime(item.time) + '</span>' + item.text + '</li>'
+      ).join('');
+    }
+
+    ws.onopen = () => {
+      document.getElementById('statusDot').className = 'status-dot status-connected';
+      document.getElementById('connectionText').textContent = 'Connected to PAL-E';
+      // Fetch initial state
+      fetch('/status').then(r => r.json()).then(updateUI);
+    };
+
+    ws.onclose = () => {
+      document.getElementById('statusDot').className = 'status-dot status-disconnected';
+      document.getElementById('connectionText').textContent = 'Disconnected - refresh to reconnect';
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'greeting') {
+        addFeedItem(data.comment);
+      } else if (data.type === 'game_event') {
+        addFeedItem(data.comment);
+        if (data.worldState) updateUI({ worldState: data.worldState });
+      }
+    };
+
+    // Refresh time-ago every 30s
+    setInterval(() => {
+      fetch('/status').then(r => r.json()).then(data => {
+        if (data.worldState?.lastParsed) {
+          document.getElementById('lastSave').textContent = timeAgo(data.worldState.lastParsed);
+        }
+      });
+    }, 30000);
+  </script>
+</body>
+</html>`;
+
 const httpServer = http.createServer((req, res) => {
   // CORS headers for browser access
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
 
-  if (req.method === 'GET' && req.url === '/status') {
+  if (req.method === 'GET' && (req.url === '/' || req.url === '/dashboard')) {
+    // Serve dashboard
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(dashboardHTML);
+  } else if (req.method === 'GET' && req.url === '/status') {
     // Return current world state
     const status = {
       worldState: {
@@ -461,6 +752,7 @@ const httpServer = http.createServer((req, res) => {
 
 httpServer.listen(8766, () => {
   console.log('[PAL-E] HTTP API on http://localhost:8766');
-  console.log('[PAL-E]   GET  /status - Current world state');
-  console.log('[PAL-E]   POST /say    - Manual commentary');
+  console.log('[PAL-E]   GET  /         - Web dashboard');
+  console.log('[PAL-E]   GET  /status   - Current world state (JSON)');
+  console.log('[PAL-E]   POST /say      - Manual commentary');
 });
