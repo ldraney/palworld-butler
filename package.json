@@ -1,18 +1,17 @@
 {
-  "name": "devy",
+  "name": "pal-e-dashboard",
   "version": "1.0.0",
-  "description": "Devy - AI Butler for Palworld gameplay awareness and commentary",
+  "description": "PAL-E Dashboard - Web UI for Palworld world awareness",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": [],
+  "keywords": ["palworld", "dashboard"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "chokidar": "^5.0.0",
     "ws": "^8.18.3"
   }
 }
