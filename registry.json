@@ -6,29 +6,32 @@
     {
       "name": "pal-e",
       "repo": "ldraney/pal-e",
-      "url": "https://github.com/ldraney/pal-e",
       "role": "Dashboard & Registry",
-      "description": "Web dashboard for monitoring world state, central hub for ecosystem",
-      "status": "active",
-      "port": 8766
+      "status": "active"
     },
     {
       "name": "pal-e-observer",
       "repo": "ldraney/pal-e-observer",
-      "url": "https://github.com/ldraney/pal-e-observer",
       "role": "Save file watching & event detection",
-      "description": "Watches Palworld save files, detects changes, broadcasts events via WebSocket",
-      "status": "planned",
-      "port": 8765
+      "status": "phase-1"
     },
     {
       "name": "pal-e-expert",
       "repo": "ldraney/pal-e-expert",
-      "url": "https://github.com/ldraney/pal-e-expert",
-      "role": "MCP coaching tools",
-      "description": "Breeding calculator, boss strategy, base optimization - Claude-native MCP server",
-      "status": "planned",
-      "port": null
+      "role": "MCP coaching tools (breeding, boss strategy)",
+      "status": "phase-1"
+    },
+    {
+      "name": "pal-e-analyzer",
+      "repo": "ldraney/pal-e-analyzer",
+      "role": "Raw data analysis from observer releases",
+      "status": "planned"
+    },
+    {
+      "name": "pal-e-community",
+      "repo": "ldraney/pal-e-community",
+      "role": "Community goals, trends, meta awareness",
+      "status": "planned"
     }
   ]
 }

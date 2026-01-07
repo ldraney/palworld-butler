@@ -11,8 +11,10 @@ PAL-E is split into three independent components:
 | Component | Repository | Role | Status |
 |-----------|------------|------|--------|
 | **pal-e** | [ldraney/pal-e](https://github.com/ldraney/pal-e) | Dashboard & Registry | Active |
-| **pal-e-observer** | [ldraney/pal-e-observer](https://github.com/ldraney/pal-e-observer) | Save file watching & event detection | Planned |
-| **pal-e-expert** | [ldraney/pal-e-expert](https://github.com/ldraney/pal-e-expert) | MCP coaching tools (breeding, boss strategy) | Planned |
+| **pal-e-observer** | [ldraney/pal-e-observer](https://github.com/ldraney/pal-e-observer) | Save file watching & event detection | Phase 1 |
+| **pal-e-expert** | [ldraney/pal-e-expert](https://github.com/ldraney/pal-e-expert) | MCP coaching tools (breeding, boss strategy) | Phase 1 |
+| **pal-e-analyzer** | [ldraney/pal-e-analyzer](https://github.com/ldraney/pal-e-analyzer) | Raw data analysis from observer releases | Planned |
+| **pal-e-community** | [ldraney/pal-e-community](https://github.com/ldraney/pal-e-community) | Community goals, trends, meta awareness | Planned |
 
 ## This Repository (pal-e)
 
