@@ -27,6 +27,8 @@ let worldState = {
   players: [],
   palCount: 0,
   lastParsed: null,
+  worldId: null,
+  hostPlayer: null,
 };
 
 // Parse save file using Python script
@@ -239,6 +241,8 @@ async function processPendingChanges() {
         worldState.players = saveData.players || [];
         worldState.palCount = saveData.pal_count || 0;
         worldState.lastParsed = new Date().toISOString();
+        worldState.worldId = saveData.world_id || null;
+        worldState.hostPlayer = saveData.host_player || null;
 
         console.log(`[PAL-E] World state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
 
@@ -374,6 +378,16 @@ watcher.on('ready', async () => {
         worldState.players = saveData.players || [];
         worldState.palCount = saveData.pal_count || 0;
         worldState.lastParsed = new Date().toISOString();
+        worldState.worldId = saveData.world_id || null;
+        worldState.hostPlayer = saveData.host_player || null;
+
+        // Display world identification
+        if (worldState.worldId) {
+          console.log(`[PAL-E] World ID: ${worldState.worldId}`);
+        }
+        if (worldState.hostPlayer) {
+          console.log(`[PAL-E] Host: ${worldState.hostPlayer}`);
+        }
         console.log(`[PAL-E] Initial state: ${worldState.players.length} players, ${worldState.palCount} Pals`);
         console.log(`[PAL-E] Players: ${worldState.players.join(', ')}`);
       }
@@ -405,7 +419,13 @@ const httpServer = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/status') {
     // Return current world state
     const status = {
-      worldState: worldState,
+      worldState: {
+        worldId: worldState.worldId,
+        hostPlayer: worldState.hostPlayer,
+        players: worldState.players,
+        palCount: worldState.palCount,
+        lastParsed: worldState.lastParsed,
+      },
       uptime: process.uptime(),
       comment: pale.getRandomComment('statusReport', {
         players: worldState.players.length,

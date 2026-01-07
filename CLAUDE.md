@@ -99,8 +99,16 @@ PAL-E is:
 
 ## Data Extracted Per Save
 
+**World:**
+- World ID (extracted from save path)
+- Host player (detected via UID pattern)
+- Base count
+- Game time
+- Save metadata
+
 **Players:**
 - Name, Level, UID
+- `is_host` flag (host has UID `00000000-0000-0000-0000-000000000001`)
 
 **Pals (full detail):**
 - Species, Level, Experience
@@ -108,10 +116,16 @@ PAL-E is:
 - Gender, Passives
 - Owner, Instance ID
 
-**World:**
-- Base count
-- Game time
-- Save metadata
+## Multiplayer Awareness
+
+PAL-E detects whether you're hosting or joined:
+
+| Role | Save Files You Have | PAL-E Can Parse |
+|------|---------------------|-----------------|
+| **Host** | `Level.sav` + `LocalData.sav` | Full world data |
+| **Client** | Only `LocalData.sav` | Limited (no world data) |
+
+Host detection uses the player UID pattern - hosts always get UID ending in `...000000000001`.
 
 ## Save Intelligence
 
@@ -151,5 +165,8 @@ PAL-E classifies each save and infers activity:
 - [x] Save type classification
 - [x] Activity inference
 - [x] Pattern learning
+- [x] World ID extraction
+- [x] Host/client detection
+- [ ] Web dashboard for world awareness
 - [ ] Goal tracking system
 - [ ] LLM integration for reasoning/suggestions

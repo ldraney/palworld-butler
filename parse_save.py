@@ -43,14 +43,25 @@ def parse_level_sav(save_path):
     except Exception as e:
         return {"error": f"Decompression failed: {str(e)}"}
 
+    # Extract world_id from path
+    # Pattern: SaveGames/<SteamID>/<WorldID>/Level.sav
+    world_id = None
+    path_parts = save_path.replace('\\', '/').split('/')
+    for i, part in enumerate(path_parts):
+        if part == 'Level.sav' and i > 0:
+            world_id = path_parts[i - 1]
+            break
+
     result = {
         "success": True,
         "file": save_path,
+        "world_id": world_id,
         "file_size_kb": round(os.path.getsize(save_path) / 1024, 1),
         "raw_size_mb": round(len(raw_gvas) / 1024 / 1024, 1),
         "players": [],
         "pal_count": 0,
         "guild_name": None,
+        "host_player": None,
     }
 
     # Extract player names
@@ -62,6 +73,16 @@ def parse_level_sav(save_path):
                 result['players'].append(name)
         except:
             pass
+
+    # Try to detect host player by looking for PlayerUId pattern
+    # Host typically has UID 00000000-0000-0000-0000-000000000001
+    # Look for IsPlayer=True followed by PlayerUId with the host pattern
+    host_uid_pattern = rb'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01'  # Host UID in binary
+    if host_uid_pattern in raw_gvas:
+        # If host UID found and we have players, first player is often the host
+        # Note: This is a heuristic - the full snapshot.py parser is more accurate
+        if result['players']:
+            result['host_player'] = result['players'][0]
 
     # Count character/pal saves
     result['pal_count'] = raw_gvas.count(b'PalIndividualCharacterSaveParameter')

@@ -100,6 +100,8 @@ class Snapshot:
     bases: list    # List of Base dicts
     pal_count: int
     game_time: Optional[int] = None
+    world_id: Optional[str] = None
+    host_player: Optional[str] = None
 
     def to_dict(self):
         return asdict(self)
@@ -120,6 +122,35 @@ def extract_value(obj, default=None):
     return obj
 
 
+def is_host_uid(uid: str) -> bool:
+    """
+    Check if a player UID indicates they are the world host.
+    Host players typically have UID 00000000-0000-0000-0000-000000000001.
+    """
+    if not uid:
+        return False
+    # Normalize and check for host pattern
+    uid_clean = uid.lower().replace('-', '')
+    return uid_clean == '00000000000000000000000000000001'
+
+
+def extract_world_id(file_path: str) -> Optional[str]:
+    """
+    Extract WorldID from save file path.
+    Path pattern: SaveGames/<SteamID>/<WorldID>/Level.sav
+    """
+    if not file_path:
+        return None
+    # Normalize path separators
+    normalized = file_path.replace('\\', '/')
+    parts = normalized.split('/')
+    # Find Level.sav and get the parent directory (WorldID)
+    for i, part in enumerate(parts):
+        if part == 'Level.sav' and i > 0:
+            return parts[i - 1]
+    return None
+
+
 def parse_save_to_json(save_path: str) -> dict:
     """Parse a save file to JSON structure using CLI tool."""
     import subprocess
@@ -131,10 +162,11 @@ def parse_save_to_json(save_path: str) -> dict:
 
     try:
         result = subprocess.run(
-            ['palworld-save-tools', '--to-json', '--convert-nan-to-null', '-o', tmp_path, save_path],
+            ['palworld-save-tools', '--to-json', '--convert-nan-to-null', '--force', '-o', tmp_path, save_path],
             capture_output=True,
             text=True,
-            timeout=300
+            timeout=300,
+            input='y\n'  # Auto-confirm any prompts
         )
 
         if result.returncode != 0:
@@ -179,10 +211,12 @@ def create_snapshot(save_path: str, json_data: dict = None) -> Snapshot:
         is_player = extract_value(obj.get('IsPlayer'), False)
 
         if is_player:
+            uid = str(extract_value(key.get('PlayerUId'), ''))
             players.append({
-                'uid': str(extract_value(key.get('PlayerUId'), '')),
+                'uid': uid,
                 'name': extract_value(obj.get('NickName'), 'Unknown'),
                 'level': extract_value(obj.get('Level'), 0),
+                'is_host': is_host_uid(uid),
             })
         else:
             species = extract_value(obj.get('CharacterID'), 'Unknown')
@@ -218,6 +252,16 @@ def create_snapshot(save_path: str, json_data: dict = None) -> Snapshot:
     game_time_data = world.get('GameTimeSaveData', {}).get('value', {})
     game_time = extract_value(game_time_data.get('GameDateTimeTicks'))
 
+    # Extract world ID from path
+    world_id = extract_world_id(save_path)
+
+    # Find host player
+    host_player = None
+    for p in players:
+        if p.get('is_host'):
+            host_player = p['name']
+            break
+
     return Snapshot(
         timestamp=datetime.now().isoformat(),
         file_path=save_path,
@@ -226,6 +270,8 @@ def create_snapshot(save_path: str, json_data: dict = None) -> Snapshot:
         bases=bases,
         pal_count=len(pals),
         game_time=game_time,
+        world_id=world_id,
+        host_player=host_player,
     )
 
 
@@ -499,9 +545,14 @@ if __name__ == '__main__':
 
     print(f"\n=== SNAPSHOT ===")
     print(f"Timestamp: {snapshot.timestamp}")
+    if snapshot.world_id:
+        print(f"World ID: {snapshot.world_id}")
+    if snapshot.host_player:
+        print(f"Host: {snapshot.host_player}")
     print(f"Players: {len(snapshot.players)}")
     for p in snapshot.players:
-        print(f"  - {p['name']} (Lv.{p['level']})")
+        host_marker = " [HOST]" if p.get('is_host') else ""
+        print(f"  - {p['name']} (Lv.{p['level']}){host_marker}")
     print(f"Pals: {snapshot.pal_count}")
     print(f"Bases: {len(snapshot.bases)}")
 
